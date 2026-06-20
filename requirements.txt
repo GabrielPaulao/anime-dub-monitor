@@ -1,0 +1,12 @@
+# ── Twitter / X Scraping (sem API key) ───────────────────────────────────────
+ntscraper>=0.3.8
+
+# ── OpenAI IA (classificacao de tweets) ──────────────────────────────────────
+openai>=1.30.0
+
+# ── Google Sheets (sincronizacao) ─────────────────────────────────────────────
+gspread>=6.0.0
+google-auth>=2.29.0
+
+# ── Utilitarios ───────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
