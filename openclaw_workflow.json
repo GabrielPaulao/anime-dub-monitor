@@ -1,0 +1,128 @@
+{
+  "_comment": "OpenClaw Workflow - Anime Dub Monitor",
+  "_descricao": "Este arquivo define o workflow do OpenClaw para organizar e processar o animes.json. Importe este arquivo no OpenClaw e configure as variaveis de ambiente antes de executar.",
+
+  "workflow": {
+    "name": "Anime Dub Monitor",
+    "version": "1.0.0",
+    "description": "Monitora contas do Twitter para animes dublados e sincroniza com Google Sheets",
+    "schedule": "manual",
+    "author": "GabrielPaulao"
+  },
+
+  "steps": [
+    {
+      "id": "step_1_monitor",
+      "name": "1. Monitorar Twitter",
+      "description": "Executa o twitter_monitor.py para buscar novos tweets e atualizar animes.json",
+      "type": "run_script",
+      "script": "twitter_monitor.py",
+      "command": "python twitter_monitor.py",
+      "working_directory": "./",
+      "on_success": "step_2_organize",
+      "on_failure": "notify_error"
+    },
+    {
+      "id": "step_2_organize",
+      "name": "2. Organizar JSON",
+      "description": "Ordena e limpa o animes.json via IA - remove duplicatas, padroniza nomes",
+      "type": "ai_process",
+      "input_file": "data/animes.json",
+      "output_file": "data/animes.json",
+      "ai_instructions": "Voce e um organizador de dados. Dado o array JSON de animes, realize as seguintes tarefas:\n1. Remova entradas duplicadas (mesmo nome de anime, case-insensitive)\n2. Padronize os nomes dos animes (capitalize corretamente)\n3. Garanta que o campo 'assistido' seja sempre boolean (true/false)\n4. Garanta que 'status' seja sempre um de: 'Dublado', 'Dublagem em andamento', 'Legendado'\n5. Ordene o array: primeiro por status (Dublado > Dublagem em andamento > Legendado), depois por nome alfabetico\n6. Retorne APENAS o JSON limpo e organizado, sem explicacoes",
+      "model": "gpt-4o-mini",
+      "on_success": "step_3_sync",
+      "on_failure": "step_3_sync"
+    },
+    {
+      "id": "step_3_sync",
+      "name": "3. Sincronizar com Google Sheets",
+      "description": "Executa sync_sheet.py para atualizar a planilha com os dados do JSON",
+      "type": "run_script",
+      "script": "sync_sheet.py",
+      "command": "python sync_sheet.py",
+      "working_directory": "./",
+      "on_success": "step_4_git",
+      "on_failure": "notify_error"
+    },
+    {
+      "id": "step_4_git",
+      "name": "4. Salvar no Git",
+      "description": "Commita o animes.json atualizado no repositorio GitHub",
+      "type": "run_command",
+      "commands": [
+        "git add data/animes.json data/historico_tweets.json",
+        "git commit -m \"chore: update animes.json [auto]\" --allow-empty",
+        "git push origin main"
+      ],
+      "working_directory": "./",
+      "on_success": "end",
+      "on_failure": "notify_error"
+    },
+    {
+      "id": "notify_error",
+      "name": "Notificar Erro",
+      "description": "Registra o erro no log",
+      "type": "log",
+      "message": "ERRO no workflow Anime Dub Monitor - verifique data/monitor.log",
+      "level": "error"
+    }
+  ],
+
+  "json_schema": {
+    "_comment": "Estrutura esperada do animes.json para referencia",
+    "type": "array",
+    "items": {
+      "type": "object",
+      "required": ["anime", "status", "assistido", "episodios"],
+      "properties": {
+        "anime": {
+          "type": "string",
+          "description": "Nome do anime"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Dublado", "Dublagem em andamento", "Legendado"],
+          "description": "Estado atual da dublagem"
+        },
+        "assistido": {
+          "type": "boolean",
+          "description": "Se o usuario ja assistiu - mapeado como checkbox na planilha",
+          "default": false
+        },
+        "episodios": {
+          "type": "array",
+          "description": "Lista de episodios detectados nos tweets",
+          "items": {
+            "type": "object",
+            "properties": {
+              "ep":       { "type": "string", "description": "Numero ou descricao do episodio" },
+              "tweet_id": { "type": "string", "description": "ID do tweet fonte" },
+              "conta":    { "type": "string", "description": "Conta do Twitter que postou" },
+              "data":     { "type": "string", "description": "Data do tweet" },
+              "texto":    { "type": "string", "description": "Texto do tweet (max 280 chars)" }
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "environment_variables": {
+    "_comment": "Configure estas variaveis no arquivo .env na raiz do projeto",
+    "OPENAI_API_KEY": "Chave da API OpenAI (obrigatoria)",
+    "OPENAI_MODEL": "Modelo a usar (padrao: gpt-4o-mini)",
+    "GOOGLE_CREDENTIALS_JSON": "Caminho para o JSON da Service Account do Google (padrao: credentials.json)",
+    "SPREADSHEET_ID": "ID da planilha Google Sheets (obrigatorio para sync)",
+    "SHEET_NAME": "Nome da aba na planilha (padrao: Animes)"
+  },
+
+  "quick_start": {
+    "1_instalar_dependencias": "pip install -r requirements.txt",
+    "2_configurar_env": "Copie .env.example para .env e preencha as variaveis",
+    "3_rodar_monitoramento": "python twitter_monitor.py",
+    "4_rodar_organizador": "Importe este JSON no OpenClaw e execute o step_2_organize",
+    "5_sincronizar_planilha": "python sync_sheet.py",
+    "6_executar_tudo": "Execute o workflow completo no OpenClaw"
+  }
+}
